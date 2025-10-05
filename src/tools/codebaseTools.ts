@@ -33,20 +33,23 @@ export class GitCloneTool extends Tool {
       // Create target directory if it doesn't exist
       await fs.mkdir(targetDir, { recursive: true });
 
-      // Get base branch from environment or default to main
-      const baseBranch = process.env.BASE_BRANCH || 'main';
+      // Use the branch from config
+      const baseBranch = branch;
 
       // Check if directory already exists and has content
       const files = await fs.readdir(targetDir);
       if (files.length > 0) {
-        // Directory exists, fetch all branches first
-        await execAsync(`cd "${targetDir}" && git fetch origin`);
+        // Directory exists, update remote URL with current token
+        await execAsync(`cd "${targetDir}" && git remote set-url origin "${cloneUrl}"`);
 
-        // Checkout base branch, force reset to latest
-        await execAsync(`cd "${targetDir}" && git checkout -f ${baseBranch} && git reset --hard origin/${baseBranch}`);
+        // Fetch latest from origin
+        await execAsync(`cd "${targetDir}" && GIT_TERMINAL_PROMPT=0 git fetch origin`);
+
+        // Force checkout base branch (switch if on different branch) and reset to latest
+        await execAsync(`cd "${targetDir}" && git checkout -f ${baseBranch} && git reset --hard origin/${baseBranch} && git clean -fd`);
       } else {
         // Clone fresh with base branch
-        await execAsync(`git clone --branch ${baseBranch} "${cloneUrl}" "${targetDir}"`);
+        await execAsync(`GIT_TERMINAL_PROMPT=0 git clone --branch ${baseBranch} "${cloneUrl}" "${targetDir}"`);
       }
 
       return JSON.stringify({

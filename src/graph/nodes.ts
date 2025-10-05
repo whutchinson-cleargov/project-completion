@@ -1,4 +1,4 @@
-import { ChatOpenAI } from '@langchain/openai';
+import { ChatAnthropic } from '@langchain/anthropic';
 import { AgentExecutor, createToolCallingAgent } from 'langchain/agents';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { Octokit } from '@octokit/rest';
@@ -27,10 +27,11 @@ export interface NodeConfig {
   githubToken: string;
   githubOwner: string;
   githubRepo: string;
+  githubTestOwner?: string;
   jiraHost: string;
   jiraEmail: string;
   jiraApiToken: string;
-  openaiApiKey: string;
+  anthropicApiKey: string;
 }
 
 export function createNodes(config: NodeConfig) {
@@ -53,10 +54,10 @@ export function createNodes(config: NodeConfig) {
     apiToken: config.jiraApiToken,
   });
 
-  const llm = new ChatOpenAI({
-    modelName: 'gpt-4.1-mini',
+  const llm = new ChatAnthropic({
+    modelName: 'claude-3-5-sonnet-20241022',
     temperature: 0,
-    openAIApiKey: config.openaiApiKey,
+    anthropicApiKey: config.anthropicApiKey,
   });
 
   // Node 1: Fetch latest commit from GitHub
@@ -260,7 +261,12 @@ Keep the response brief and suitable for a changelog entry.`;
       console.log(response.output);
       console.log('\n═══════════════════════════════════════════════════════════════\n');
 
-      return { summary: response.output };
+      // Ensure summary is a string
+      const summary = typeof response.output === 'string'
+        ? response.output
+        : JSON.stringify(response.output);
+
+      return { summary };
     } catch (error) {
       const errorMsg = `Failed to generate summary: ${(error as Error).message}`;
       console.error(`❌ ${errorMsg}\n`);
@@ -287,8 +293,11 @@ Keep the response brief and suitable for a changelog entry.`;
       const ticketType = state.jiraData?.issueType || 'N/A';
       const commitLink = `[${state.commitData.hash.substring(0, 7)}](${state.commitData.url})`;
 
+      // Ensure summary is a string
+      const summaryText = typeof state.summary === 'string' ? state.summary : String(state.summary || 'No summary available');
+
       // Extract concise description from summary (find bullets after "Summary of changes")
-      const summaryLines = state.summary.split('\n').filter(line => line.trim());
+      const summaryLines = summaryText.split('\n').filter(line => line.trim());
       let conciseDescription = 'No description';
 
       for (let i = 0; i < summaryLines.length; i++) {
@@ -317,7 +326,7 @@ Keep the response brief and suitable for a changelog entry.`;
 **Commit:** ${commitLink}
 
 **Summary:**
-${state.summary}
+${summaryText}
 
 ---
 `;
@@ -471,6 +480,127 @@ ${state.summary}
     }
   }
 
+  // Node 10: Detect endpoint changes
+  async function detectEndpointChangesNode(state: GraphStateType): Promise<Partial<GraphStateType>> {
+    console.log('🔍 Step 10: Detecting endpoint changes...');
+
+    // Check if FORCE_API_CHANGED flag is set
+    if (process.env.FORCE_API_CHANGED === 'true') {
+      console.log('✅ FORCE_API_CHANGED flag is set - forcing endpoint changes to true\n');
+      return { endpointChanges: true };
+    }
+
+    if (!state.commitData || !state.diffData || !state.codebasePath) {
+      return { endpointChanges: false };
+    }
+
+    try {
+      const llm = new ChatAnthropic({
+        modelName: 'claude-3-5-sonnet-20241022',
+        temperature: 0,
+        anthropicApiKey: config.anthropicApiKey,
+      });
+
+      const prompt = `Analyze the following commit diff and determine if there are any API endpoint changes.
+
+COMMIT DIFF:
+${state.diffData.diff}
+
+Look for:
+- New API routes or endpoints (e.g., app.get(), app.post(), router.get(), @GetMapping, etc.)
+- Modified API routes or endpoints
+- Deleted API routes or endpoints
+- Changes to endpoint paths, parameters, or HTTP methods
+
+Respond with ONLY "YES" if endpoint changes are detected, or "NO" if no endpoint changes are found.`;
+
+      const response = await llm.invoke(prompt);
+      const hasEndpointChanges = response.content.toString().trim().toUpperCase() === 'YES';
+
+      console.log(`✅ Endpoint changes detected: ${hasEndpointChanges}\n`);
+
+      return { endpointChanges: hasEndpointChanges };
+    } catch (error) {
+      console.error(`❌ Failed to detect endpoint changes: ${(error as Error).message}\n`);
+      return { endpointChanges: false };
+    }
+  }
+
+  // Node 11: Clone test codebase
+  async function cloneTestCodebaseNode(_state: GraphStateType): Promise<Partial<GraphStateType>> {
+    console.log('📦 Step 11: Cloning test codebase...');
+
+    try {
+      const testRepo = process.env.GITHUB_TEST_REPO;
+      const testBranch = process.env.BASE_TEST_BRANCH || 'master';
+      const targetDir = path.join(process.cwd(), 'temp', 'test-codebase');
+
+      if (!testRepo) {
+        console.log('⚠️  No test repository configured, skipping...\n');
+        return { testCodebasePath: null };
+      }
+
+      // Use test owner if provided, otherwise fall back to main owner
+      const testOwner = process.env.GITHUB_TEST_OWNER || config.githubOwner;
+
+      const gitCloneTool = new GitCloneTool({
+        token: config.githubToken,
+        owner: testOwner,
+        repo: testRepo,
+        branch: testBranch,
+        targetDir,
+      });
+
+      const result = await gitCloneTool._call();
+      const cloneResult = JSON.parse(result);
+
+      console.log(`✅ Test codebase cloned to: ${cloneResult.path}\n`);
+
+      return { testCodebasePath: cloneResult.path };
+    } catch (error) {
+      const errorMsg = `Failed to clone test codebase: ${(error as Error).message}`;
+      console.error(`❌ ${errorMsg}\n`);
+      return { error: errorMsg };
+    }
+  }
+
+  // Node 12: Create test branch
+  async function createTestBranchNode(state: GraphStateType): Promise<Partial<GraphStateType>> {
+    console.log('🌿 Step 12: Creating test branch...');
+
+    if (!state.testCodebasePath) {
+      return { error: 'Missing test codebase path' };
+    }
+
+    try {
+      const ticketNumber = state.jiraData?.ticketNumber || 'no-ticket';
+      const parts = ticketNumber.split('-');
+      const prefix = parts[0].toLowerCase();
+      const branchName = `${prefix}/${ticketNumber}_change-log-updates`;
+
+      const baseBranch = process.env.BASE_TEST_BRANCH || 'master';
+
+      // Force checkout base branch, pull latest, delete existing branch, create new
+      await execAsync(`cd "${state.testCodebasePath}" && git checkout -f ${baseBranch} && git pull origin ${baseBranch}`);
+
+      try {
+        await execAsync(`cd "${state.testCodebasePath}" && git branch -D ${branchName} 2>/dev/null || true`);
+      } catch (error) {
+        // Ignore if branch doesn't exist
+      }
+
+      await execAsync(`cd "${state.testCodebasePath}" && git checkout -b ${branchName}`);
+
+      console.log(`✅ Created test branch: ${branchName}\n`);
+
+      return { testFeatureBranch: branchName };
+    } catch (error) {
+      const errorMsg = `Failed to create test branch: ${(error as Error).message}`;
+      console.error(`❌ ${errorMsg}\n`);
+      return { error: errorMsg };
+    }
+  }
+
   return {
     fetchCommitNode,
     fetchDiffNode,
@@ -481,5 +611,8 @@ ${state.summary}
     createBranchNode,
     commitChangelogNode,
     createPRNode,
+    detectEndpointChangesNode,
+    cloneTestCodebaseNode,
+    createTestBranchNode,
   };
 }

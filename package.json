@@ -16,6 +16,7 @@
   "license": "ISC",
   "description": "LangGraph project for analyzing GitHub commits with Jira integration and AI summaries",
   "dependencies": {
+    "@langchain/anthropic": "^0.3.30",
     "@langchain/community": "^0.3.57",
     "@langchain/core": "^0.3.78",
     "@langchain/langgraph": "^0.4.9",

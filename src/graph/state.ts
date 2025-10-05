@@ -64,6 +64,33 @@ export const GraphState = Annotation.Root({
     default: () => null,
   }),
 
+  // Endpoint changes detected
+  endpointChanges: Annotation<boolean>({
+    reducer: (_, newValue) => newValue,
+    default: () => false,
+  }),
+
+  // Test repository paths
+  testCodebasePath: Annotation<string | null>({
+    reducer: (_, newValue) => newValue,
+    default: () => null,
+  }),
+
+  testFeatureBranch: Annotation<string | null>({
+    reducer: (_, newValue) => newValue,
+    default: () => null,
+  }),
+
+  testCommitCreated: Annotation<boolean>({
+    reducer: (_, newValue) => newValue,
+    default: () => false,
+  }),
+
+  testPullRequestUrl: Annotation<string | null>({
+    reducer: (_, newValue) => newValue,
+    default: () => null,
+  }),
+
   // Error tracking
   error: Annotation<string | null>({
     reducer: (_, newValue) => newValue,

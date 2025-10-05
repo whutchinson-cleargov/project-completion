@@ -10,7 +10,7 @@ async function main() {
     'JIRA_HOST',
     'JIRA_EMAIL',
     'JIRA_API_TOKEN',
-    'OPENAI_API_KEY',
+    'ANTHROPIC_API_KEY',
   ];
 
   const missingVars = requiredEnvVars.filter((varName) => !process.env[varName]);
@@ -30,7 +30,7 @@ async function main() {
       jiraHost: process.env.JIRA_HOST!,
       jiraEmail: process.env.JIRA_EMAIL!,
       jiraApiToken: process.env.JIRA_API_TOKEN!,
-      openaiApiKey: process.env.OPENAI_API_KEY!,
+      anthropicApiKey: process.env.ANTHROPIC_API_KEY!,
     });
   } catch (error) {
     console.error('Fatal error:', error);

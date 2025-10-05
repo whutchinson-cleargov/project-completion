@@ -6,6 +6,11 @@ export function createWorkflow(config: NodeConfig) {
   // Create nodes with configuration
   const nodes = createNodes(config);
 
+  // Helper function to route based on error state
+  const shouldContinue = (state: GraphStateType) => {
+    return state.error ? END : 'continue';
+  };
+
   // Create the graph
   const workflow = new StateGraph(GraphState)
     // Add nodes to the graph
@@ -18,17 +23,34 @@ export function createWorkflow(config: NodeConfig) {
     .addNode('updateChangelog', nodes.updateChangelogNode)
     .addNode('commitChangelog', nodes.commitChangelogNode)
     .addNode('createPR', nodes.createPRNode)
-    // Define the flow
+    .addNode('detectEndpointChanges', nodes.detectEndpointChangesNode)
+    .addNode('cloneTestCodebase', nodes.cloneTestCodebaseNode)
+    .addNode('createTestBranch', nodes.createTestBranchNode)
+    // Define the flow with error checking
     .addEdge('__start__', 'fetchCommit')
-    .addEdge('fetchCommit', 'fetchDiff')
-    .addEdge('fetchDiff', 'extractJira')
-    .addEdge('extractJira', 'cloneCodebase')
-    .addEdge('cloneCodebase', 'generateSummary')
-    .addEdge('generateSummary', 'createBranch')
-    .addEdge('createBranch', 'updateChangelog')
-    .addEdge('updateChangelog', 'commitChangelog')
-    .addEdge('commitChangelog', 'createPR')
-    .addEdge('createPR', END);
+    .addConditionalEdges('fetchCommit', shouldContinue, { continue: 'fetchDiff', [END]: END })
+    .addConditionalEdges('fetchDiff', shouldContinue, { continue: 'extractJira', [END]: END })
+    .addConditionalEdges('extractJira', shouldContinue, { continue: 'cloneCodebase', [END]: END })
+    .addConditionalEdges('cloneCodebase', shouldContinue, { continue: 'generateSummary', [END]: END })
+    .addConditionalEdges('generateSummary', shouldContinue, { continue: 'createBranch', [END]: END })
+    .addConditionalEdges('createBranch', shouldContinue, { continue: 'updateChangelog', [END]: END })
+    .addConditionalEdges('updateChangelog', shouldContinue, { continue: 'commitChangelog', [END]: END })
+    .addConditionalEdges('commitChangelog', shouldContinue, { continue: 'createPR', [END]: END })
+    .addConditionalEdges('createPR', shouldContinue, { continue: 'detectEndpointChanges', [END]: END })
+    // Conditional routing: if endpoint changes detected, go to test repo flow
+    .addConditionalEdges(
+      'detectEndpointChanges',
+      (state: GraphStateType) => {
+        if (state.error) return END;
+        return state.endpointChanges ? 'cloneTestCodebase' : END;
+      },
+      {
+        cloneTestCodebase: 'cloneTestCodebase',
+        [END]: END,
+      }
+    )
+    .addConditionalEdges('cloneTestCodebase', shouldContinue, { continue: 'createTestBranch', [END]: END })
+    .addEdge('createTestBranch', END);
 
   return workflow.compile();
 }

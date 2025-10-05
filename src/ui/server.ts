@@ -25,100 +25,125 @@ const config = {
   jiraHost: process.env.JIRA_HOST || '',
   jiraEmail: process.env.JIRA_EMAIL || '',
   jiraApiToken: process.env.JIRA_API_TOKEN || '',
-  openaiApiKey: process.env.OPENAI_API_KEY || '',
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
 };
 
 const workflow = createWorkflow(config);
 
 // API endpoint to get graph structure
-app.get('/api/graph', (req, res) => {
-  try {
-    // Get the actual graph structure from the workflow
-    const graphData = {
-      nodes: [
-        { 
-          id: 'fetchCommit', 
-          label: '📡 Fetch Latest Commit', 
-          type: 'github',
-          description: 'Retrieves the most recent commit from GitHub repository',
-          status: 'pending'
-        },
-        { 
-          id: 'fetchDiff', 
-          label: '📄 Fetch Commit Diff', 
-          type: 'github',
-          description: 'Gets the detailed diff showing what files changed',
-          status: 'pending'
-        },
-        { 
-          id: 'extractJira', 
-          label: '🎫 Extract Jira Ticket', 
-          type: 'jira',
-          description: 'Parses commit message to find and retrieve Jira ticket info',
-          status: 'pending'
-        },
-        { 
-          id: 'cloneCodebase', 
-          label: '📦 Clone Codebase', 
-          type: 'git',
-          description: 'Clones the repository for detailed code analysis',
-          status: 'pending'
-        },
-        { 
-          id: 'generateSummary', 
-          label: '🤖 Generate AI Summary', 
-          type: 'ai',
-          description: 'Creates comprehensive analysis using AI with codebase context',
-          status: 'pending'
-        },
-        { 
-          id: 'createBranch', 
-          label: '🌿 Create Branch', 
-          type: 'github',
-          description: 'Creates a new branch for changelog updates',
-          status: 'pending'
-        },
-        { 
-          id: 'updateChangelog', 
-          label: '📝 Update Changelog', 
-          type: 'file',
-          description: 'Updates CHANGELOG.md with commit information',
-          status: 'pending'
-        },
-        { 
-          id: 'commitChangelog', 
-          label: '💾 Commit Changelog', 
-          type: 'git',
-          description: 'Commits the updated changelog to the new branch',
-          status: 'pending'
-        },
-        { 
-          id: 'createPR', 
-          label: '🔀 Create Pull Request', 
-          type: 'github',
-          description: 'Creates a pull request with the changelog update',
-          status: 'pending'
-        },
-      ],
-      edges: [
-        { from: '__start__', to: 'fetchCommit' },
-        { from: 'fetchCommit', to: 'fetchDiff' },
-        { from: 'fetchDiff', to: 'extractJira' },
-        { from: 'extractJira', to: 'cloneCodebase' },
-        { from: 'cloneCodebase', to: 'generateSummary' },
-        { from: 'generateSummary', to: 'createBranch' },
-        { from: 'createBranch', to: 'updateChangelog' },
-        { from: 'updateChangelog', to: 'commitChangelog' },
-        { from: 'commitChangelog', to: 'createPR' },
-        { from: 'createPR', to: '__end__' },
-      ],
-      metadata: {
-        title: 'Project Completion Agent Workflow',
-        description: 'Automated workflow for analyzing commits, extracting Jira tickets, and updating project documentation',
-        totalSteps: 9,
-        estimatedDuration: '2-5 minutes'
-      }
-    };
+        app.get('/api/graph', (req, res) => {
+          try {
+            // Get the actual graph structure from the workflow
+            const graphData = {
+              nodes: [
+                { 
+                  id: 'fetchCommit', 
+                  label: '📡 Fetch Latest Commit', 
+                  type: 'github',
+                  description: 'Retrieves the most recent commit from GitHub repository',
+                  status: 'pending'
+                },
+                { 
+                  id: 'fetchDiff', 
+                  label: '📄 Fetch Commit Diff', 
+                  type: 'github',
+                  description: 'Gets the detailed diff showing what files changed',
+                  status: 'pending'
+                },
+                { 
+                  id: 'extractJira', 
+                  label: '🎫 Extract Jira Ticket', 
+                  type: 'jira',
+                  description: 'Parses commit message to find and retrieve Jira ticket info',
+                  status: 'pending'
+                },
+                { 
+                  id: 'cloneCodebase', 
+                  label: '📦 Clone Codebase', 
+                  type: 'git',
+                  description: 'Clones the repository for detailed code analysis',
+                  status: 'pending'
+                },
+                { 
+                  id: 'generateSummary', 
+                  label: '🤖 Generate AI Summary', 
+                  type: 'ai',
+                  description: 'Creates comprehensive analysis using AI with codebase context',
+                  status: 'pending'
+                },
+                { 
+                  id: 'createBranch', 
+                  label: '🌿 Create Branch', 
+                  type: 'github',
+                  description: 'Creates a new branch for changelog updates',
+                  status: 'pending'
+                },
+                { 
+                  id: 'updateChangelog', 
+                  label: '📝 Update Changelog', 
+                  type: 'file',
+                  description: 'Updates CHANGELOG.md with commit information',
+                  status: 'pending'
+                },
+                { 
+                  id: 'commitChangelog', 
+                  label: '💾 Commit Changelog', 
+                  type: 'git',
+                  description: 'Commits the updated changelog to the new branch',
+                  status: 'pending'
+                },
+                { 
+                  id: 'createPR', 
+                  label: '🔀 Create Pull Request', 
+                  type: 'github',
+                  description: 'Creates a pull request with the changelog update',
+                  status: 'pending'
+                },
+                { 
+                  id: 'detectEndpointChanges', 
+                  label: '🔍 Detect Endpoint Changes', 
+                  type: 'ai',
+                  description: 'Analyzes changes to detect if API endpoints were modified',
+                  status: 'pending'
+                },
+                { 
+                  id: 'cloneTestCodebase', 
+                  label: '🧪 Clone Test Codebase', 
+                  type: 'git',
+                  description: 'Clones the test repository for endpoint testing',
+                  status: 'pending'
+                },
+                {
+                  id: 'createTestBranch',
+                  label: '🌿 Create Test Branch',
+                  type: 'github',
+                  description: 'Creates a new branch in the test repository',
+                  status: 'pending'
+                },
+              ],
+              edges: [
+                { from: '__start__', to: 'fetchCommit' },
+                { from: 'fetchCommit', to: 'fetchDiff' },
+                { from: 'fetchDiff', to: 'extractJira' },
+                { from: 'extractJira', to: 'cloneCodebase' },
+                { from: 'cloneCodebase', to: 'generateSummary' },
+                { from: 'generateSummary', to: 'createBranch' },
+                { from: 'createBranch', to: 'updateChangelog' },
+                { from: 'updateChangelog', to: 'commitChangelog' },
+                { from: 'commitChangelog', to: 'createPR' },
+                { from: 'createPR', to: 'detectEndpointChanges' },
+                { from: 'detectEndpointChanges', to: 'cloneTestCodebase', condition: 'endpointChanges' },
+                { from: 'detectEndpointChanges', to: '__end__', condition: 'noEndpointChanges' },
+                { from: 'cloneTestCodebase', to: 'createTestBranch' },
+                { from: 'createTestBranch', to: '__end__' },
+              ],
+              metadata: {
+                title: 'Project Completion Agent Workflow',
+                description: 'Automated workflow for analyzing commits, extracting Jira tickets, updating project documentation, and handling test repository changes',
+                totalSteps: 12,
+                estimatedDuration: '2-5 minutes'
+              }
+            };
     
     res.json(graphData);
   } catch (error) {
@@ -131,9 +156,7 @@ app.post('/api/run', async (req, res) => {
   try {
     console.log('🚀 Starting workflow execution...');
     
-    const result = await workflow.invoke({
-      messages: [],
-    });
+    const result = await workflow.invoke({});
     
     res.json({ 
       success: true, 
@@ -170,37 +193,63 @@ wss.on('connection', (ws) => {
           { id: 'createBranch', name: 'Create Branch', message: 'Creating new branch...' },
           { id: 'updateChangelog', name: 'Update Changelog', message: 'Updating CHANGELOG.md...' },
           { id: 'commitChangelog', name: 'Commit Changelog', message: 'Committing changes...' },
-          { id: 'createPR', name: 'Create PR', message: 'Creating pull request...' }
+          { id: 'createPR', name: 'Create PR', message: 'Creating pull request...' },
+          { id: 'detectEndpointChanges', name: 'Detect Endpoint Changes', message: 'Analyzing changes for API endpoints...' },
+          { id: 'cloneTestCodebase', name: 'Clone Test Codebase', message: 'Cloning test repository...' },
+          { id: 'createTestBranch', name: 'Create Test Branch', message: 'Creating test branch...' }
         ];
         
-        for (const step of steps) {
-          // Send progress
+        // Run the actual workflow execution
+        ws.send(JSON.stringify({
+          type: 'progress',
+          step: 'Starting Workflow',
+          nodeId: 'start',
+          message: 'Running actual LangGraph workflow (check console for real progress)...'
+        }));
+        
+        try {
+          console.log('🚀 Starting actual workflow execution via WebSocket...');
+          const result = await workflow.invoke({});
+          console.log('✅ Workflow execution completed successfully');
+          
+          // Mark all nodes as completed since workflow finished successfully
+          const nodeMapping = {
+            'fetchCommit': 'Fetch Commit',
+            'fetchDiff': 'Fetch Diff',
+            'extractJira': 'Extract Jira',
+            'cloneCodebase': 'Clone Codebase',
+            'generateSummary': 'Generate Summary',
+            'createBranch': 'Create Branch',
+            'updateChangelog': 'Update Changelog',
+            'commitChangelog': 'Commit Changelog',
+            'createPR': 'Create PR',
+            'detectEndpointChanges': 'Detect Endpoint Changes',
+            'cloneTestCodebase': 'Clone Test Codebase',
+            'createTestBranch': 'Create Test Branch'
+          };
+          
+          // Update UI to show all steps completed
+          Object.keys(nodeMapping).forEach(nodeId => {
+            ws.send(JSON.stringify({
+              type: 'step_complete',
+              step: nodeMapping[nodeId],
+              nodeId: nodeId
+            }));
+          });
+          
           ws.send(JSON.stringify({
-            type: 'progress',
-            step: step.name,
-            nodeId: step.id,
-            message: step.message
+            type: 'complete',
+            result,
+            timestamp: new Date().toISOString()
           }));
           
-          // Simulate step completion (in real implementation, this would be actual workflow progress)
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
+        } catch (error) {
+          console.error('❌ Workflow execution failed:', (error as Error).message);
           ws.send(JSON.stringify({
-            type: 'step_complete',
-            step: step.name,
-            nodeId: step.id
+            type: 'error',
+            error: (error as Error).message
           }));
         }
-        
-        const result = await workflow.invoke({
-          messages: [],
-        });
-        
-        ws.send(JSON.stringify({
-          type: 'complete',
-          result,
-          timestamp: new Date().toISOString()
-        }));
       }
     } catch (error) {
       ws.send(JSON.stringify({
@@ -282,12 +331,50 @@ app.get('/', (req, res) => {
                 font-size: 0.9em;
             }
             .workflow-flow {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 25px;
+                margin-top: 20px;
+            }
+            .workflow-section {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 15px;
+            }
+            .section-title {
+                font-size: 16px;
+                font-weight: 600;
+                color: #374151;
+                text-align: center;
+                padding: 8px 16px;
+                background: #f3f4f6;
+                border-radius: 8px;
+                border: 2px dashed #d1d5db;
+                width: 100%;
+                max-width: 600px;
+            }
+            .section-nodes {
                 display: flex;
                 flex-wrap: wrap;
                 justify-content: center;
                 align-items: flex-start;
                 gap: 15px;
-                margin-top: 20px;
+                width: 100%;
+            }
+            .conditional-flow {
+                border: 2px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 15px;
+                background: #f9fafb;
+                margin: 10px 0;
+            }
+            .conditional-title {
+                font-size: 14px;
+                font-weight: 600;
+                color: #6b7280;
+                text-align: center;
+                margin-bottom: 10px;
             }
             .node {
                 display: flex;
@@ -471,11 +558,19 @@ app.get('/', (req, res) => {
                         document.getElementById('workflowMeta').textContent = 
                             \`\${data.metadata.totalSteps} steps • \${data.metadata.estimatedDuration}\`;
                         
-                        const nodesContainer = document.getElementById('nodes');
-                        nodesContainer.innerHTML = '';
+                        const workflowFlow = document.getElementById('workflowFlow');
+                        workflowFlow.innerHTML = '';
                         
-                        // Create workflow flow with arrows
-                        data.nodes.forEach((node, index) => {
+                        // Main workflow section
+                        const mainSection = document.createElement('div');
+                        mainSection.className = 'workflow-section';
+                        mainSection.innerHTML = '<div class="section-title">Main Workflow</div><div class="section-nodes"></div>';
+                        
+                        const mainNodes = mainSection.querySelector('.section-nodes');
+                        
+                        // Add main workflow nodes (first 10 nodes)
+                        const mainWorkflowNodes = data.nodes.slice(0, 10);
+                        mainWorkflowNodes.forEach((node, index) => {
                             const nodeEl = document.createElement('div');
                             nodeEl.className = \`node \${node.type}\`;
                             nodeEl.innerHTML = \`
@@ -484,18 +579,57 @@ app.get('/', (req, res) => {
                                 <div class="node-status \${node.status}"></div>
                             \`;
                             nodeEl.id = \`node-\${node.id}\`;
-                            nodesContainer.appendChild(nodeEl);
+                            mainNodes.appendChild(nodeEl);
                             
-                            // Add arrow between nodes (except for the last one)
-                            if (index < data.nodes.length - 1) {
+                            // Add arrow between nodes (except for the last one in this section)
+                            if (index < mainWorkflowNodes.length - 1) {
                                 const arrowEl = document.createElement('div');
                                 arrowEl.className = 'flow-arrow';
                                 arrowEl.innerHTML = '→';
-                                nodesContainer.appendChild(arrowEl);
+                                mainNodes.appendChild(arrowEl);
                             }
                         });
                         
-                        showStatus('📊 Workflow structure loaded successfully', 'success');
+                        workflowFlow.appendChild(mainSection);
+                        
+                        // Conditional test repository flow
+                        const testSection = document.createElement('div');
+                        testSection.className = 'workflow-section';
+                        testSection.innerHTML = \`
+                            <div class="section-title">Test Repository Flow (Conditional)</div>
+                            <div class="conditional-flow">
+                                <div class="conditional-title">Only runs if endpoint changes are detected</div>
+                                <div class="section-nodes"></div>
+                            </div>
+                        \`;
+                        
+                        const testNodes = testSection.querySelector('.section-nodes');
+                        
+                        // Add test workflow nodes (remaining nodes)
+                        const testWorkflowNodes = data.nodes.slice(10);
+                        testWorkflowNodes.forEach((node, index) => {
+                            const nodeEl = document.createElement('div');
+                            nodeEl.className = \`node \${node.type}\`;
+                            nodeEl.innerHTML = \`
+                                <div class="node-label">\${node.label}</div>
+                                <div class="node-description">\${node.description}</div>
+                                <div class="node-status \${node.status}"></div>
+                            \`;
+                            nodeEl.id = \`node-\${node.id}\`;
+                            testNodes.appendChild(nodeEl);
+                            
+                            // Add arrow between nodes (except for the last one in this section)
+                            if (index < testWorkflowNodes.length - 1) {
+                                const arrowEl = document.createElement('div');
+                                arrowEl.className = 'flow-arrow';
+                                arrowEl.innerHTML = '→';
+                                testNodes.appendChild(arrowEl);
+                            }
+                        });
+                        
+                        workflowFlow.appendChild(testSection);
+                        
+                        showStatus('📊 Enhanced workflow structure loaded successfully', 'success');
                     })
                     .catch(error => {
                         showStatus(\`❌ Failed to load workflow: \${error.message}\`, 'error');

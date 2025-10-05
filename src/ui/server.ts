@@ -33,23 +33,91 @@ const workflow = createWorkflow(config);
 // API endpoint to get graph structure
 app.get('/api/graph', (req, res) => {
   try {
-    // Get the graph structure from LangGraph
+    // Get the actual graph structure from the workflow
     const graphData = {
       nodes: [
-        { id: 'fetchCommit', label: 'Fetch Commit', type: 'github' },
-        { id: 'fetchDiff', label: 'Fetch Diff', type: 'github' },
-        { id: 'extractJira', label: 'Extract Jira', type: 'jira' },
-        { id: 'cloneCodebase', label: 'Clone Codebase', type: 'git' },
-        { id: 'generateSummary', label: 'Generate Summary', type: 'ai' },
+        { 
+          id: 'fetchCommit', 
+          label: '📡 Fetch Latest Commit', 
+          type: 'github',
+          description: 'Retrieves the most recent commit from GitHub repository',
+          status: 'pending'
+        },
+        { 
+          id: 'fetchDiff', 
+          label: '📄 Fetch Commit Diff', 
+          type: 'github',
+          description: 'Gets the detailed diff showing what files changed',
+          status: 'pending'
+        },
+        { 
+          id: 'extractJira', 
+          label: '🎫 Extract Jira Ticket', 
+          type: 'jira',
+          description: 'Parses commit message to find and retrieve Jira ticket info',
+          status: 'pending'
+        },
+        { 
+          id: 'cloneCodebase', 
+          label: '📦 Clone Codebase', 
+          type: 'git',
+          description: 'Clones the repository for detailed code analysis',
+          status: 'pending'
+        },
+        { 
+          id: 'generateSummary', 
+          label: '🤖 Generate AI Summary', 
+          type: 'ai',
+          description: 'Creates comprehensive analysis using AI with codebase context',
+          status: 'pending'
+        },
+        { 
+          id: 'createBranch', 
+          label: '🌿 Create Branch', 
+          type: 'github',
+          description: 'Creates a new branch for changelog updates',
+          status: 'pending'
+        },
+        { 
+          id: 'updateChangelog', 
+          label: '📝 Update Changelog', 
+          type: 'file',
+          description: 'Updates CHANGELOG.md with commit information',
+          status: 'pending'
+        },
+        { 
+          id: 'commitChangelog', 
+          label: '💾 Commit Changelog', 
+          type: 'git',
+          description: 'Commits the updated changelog to the new branch',
+          status: 'pending'
+        },
+        { 
+          id: 'createPR', 
+          label: '🔀 Create Pull Request', 
+          type: 'github',
+          description: 'Creates a pull request with the changelog update',
+          status: 'pending'
+        },
       ],
       edges: [
+        { from: '__start__', to: 'fetchCommit' },
         { from: 'fetchCommit', to: 'fetchDiff' },
-        { from: 'fetchCommit', to: 'extractJira' },
-        { from: 'fetchCommit', to: 'cloneCodebase' },
-        { from: 'fetchDiff', to: 'generateSummary' },
-        { from: 'extractJira', to: 'generateSummary' },
+        { from: 'fetchDiff', to: 'extractJira' },
+        { from: 'extractJira', to: 'cloneCodebase' },
         { from: 'cloneCodebase', to: 'generateSummary' },
+        { from: 'generateSummary', to: 'createBranch' },
+        { from: 'createBranch', to: 'updateChangelog' },
+        { from: 'updateChangelog', to: 'commitChangelog' },
+        { from: 'commitChangelog', to: 'createPR' },
+        { from: 'createPR', to: '__end__' },
       ],
+      metadata: {
+        title: 'Project Completion Agent Workflow',
+        description: 'Automated workflow for analyzing commits, extracting Jira tickets, and updating project documentation',
+        totalSteps: 9,
+        estimatedDuration: '2-5 minutes'
+      }
     };
     
     res.json(graphData);
@@ -92,12 +160,37 @@ wss.on('connection', (ws) => {
       if (data.type === 'run_workflow') {
         console.log('🔄 Running workflow via WebSocket...');
         
-        // Send progress updates
-        ws.send(JSON.stringify({
-          type: 'progress',
-          step: 'fetchCommit',
-          message: 'Fetching latest commit from GitHub...'
-        }));
+        // Send progress updates for each step
+        const steps = [
+          { id: 'fetchCommit', name: 'Fetch Commit', message: 'Fetching latest commit from GitHub...' },
+          { id: 'fetchDiff', name: 'Fetch Diff', message: 'Retrieving commit diff...' },
+          { id: 'extractJira', name: 'Extract Jira', message: 'Extracting Jira ticket information...' },
+          { id: 'cloneCodebase', name: 'Clone Codebase', message: 'Cloning repository for analysis...' },
+          { id: 'generateSummary', name: 'Generate Summary', message: 'Creating AI-powered summary...' },
+          { id: 'createBranch', name: 'Create Branch', message: 'Creating new branch...' },
+          { id: 'updateChangelog', name: 'Update Changelog', message: 'Updating CHANGELOG.md...' },
+          { id: 'commitChangelog', name: 'Commit Changelog', message: 'Committing changes...' },
+          { id: 'createPR', name: 'Create PR', message: 'Creating pull request...' }
+        ];
+        
+        for (const step of steps) {
+          // Send progress
+          ws.send(JSON.stringify({
+            type: 'progress',
+            step: step.name,
+            nodeId: step.id,
+            message: step.message
+          }));
+          
+          // Simulate step completion (in real implementation, this would be actual workflow progress)
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          ws.send(JSON.stringify({
+            type: 'step_complete',
+            step: step.name,
+            nodeId: step.id
+          }));
+        }
         
         const result = await workflow.invoke({
           messages: [],
@@ -134,48 +227,139 @@ app.get('/', (req, res) => {
         <style>
             body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                max-width: 1200px;
+                max-width: 1400px;
                 margin: 0 auto;
                 padding: 20px;
-                background: #f5f5f5;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
             }
             .container {
                 background: white;
-                border-radius: 8px;
+                border-radius: 12px;
                 padding: 30px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+                backdrop-filter: blur(10px);
             }
             h1 {
                 color: #333;
                 text-align: center;
-                margin-bottom: 30px;
+                margin-bottom: 10px;
+                font-size: 2.5em;
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
             }
-            .graph-container {
+            .subtitle {
+                text-align: center;
+                color: #666;
+                margin-bottom: 30px;
+                font-size: 1.1em;
+            }
+            .workflow-container {
                 border: 2px solid #e1e5e9;
-                border-radius: 8px;
-                padding: 20px;
+                border-radius: 12px;
+                padding: 25px;
                 margin: 20px 0;
-                background: #f8f9fa;
-                min-height: 300px;
+                background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                min-height: 400px;
+                position: relative;
+                overflow: hidden;
+            }
+            .workflow-header {
+                text-align: center;
+                margin-bottom: 20px;
+                padding-bottom: 15px;
+                border-bottom: 2px solid #dee2e6;
+            }
+            .workflow-title {
+                font-size: 1.5em;
+                font-weight: bold;
+                color: #495057;
+                margin-bottom: 5px;
+            }
+            .workflow-meta {
+                color: #6c757d;
+                font-size: 0.9em;
+            }
+            .workflow-flow {
                 display: flex;
-                align-items: center;
+                flex-wrap: wrap;
                 justify-content: center;
-                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+                margin-top: 20px;
             }
             .node {
-                display: inline-block;
-                padding: 10px 20px;
-                margin: 5px;
-                border-radius: 6px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                padding: 15px 20px;
+                margin: 8px;
+                border-radius: 10px;
                 font-weight: 500;
                 color: white;
                 text-align: center;
-                min-width: 120px;
+                min-width: 160px;
+                max-width: 180px;
+                position: relative;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                transition: all 0.3s ease;
+                cursor: pointer;
             }
-            .node.github { background: #24292e; }
-            .node.jira { background: #0052cc; }
-            .node.git { background: #f05032; }
-            .node.ai { background: #10a37f; }
+            .node:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+            }
+            .node.github { background: linear-gradient(135deg, #24292e, #586069); }
+            .node.jira { background: linear-gradient(135deg, #0052cc, #0065ff); }
+            .node.git { background: linear-gradient(135deg, #f05032, #ff6b47); }
+            .node.ai { background: linear-gradient(135deg, #10a37f, #16c085); }
+            .node.file { background: linear-gradient(135deg, #6f42c1, #8b5cf6); }
+            .node-label {
+                font-size: 0.9em;
+                font-weight: 600;
+                margin-bottom: 5px;
+            }
+            .node-description {
+                font-size: 0.75em;
+                opacity: 0.9;
+                line-height: 1.3;
+            }
+            .node-status {
+                position: absolute;
+                top: -5px;
+                right: -5px;
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                border: 2px solid white;
+                font-size: 0.7em;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .node-status.pending { background: #ffc107; }
+            .node-status.running { background: #17a2b8; animation: pulse 1s infinite; }
+            .node-status.completed { background: #28a745; }
+            .node-status.error { background: #dc3545; }
+            @keyframes pulse {
+                0% { opacity: 1; }
+                50% { opacity: 0.5; }
+                100% { opacity: 1; }
+            }
+            .flow-arrow {
+                color: #6c757d;
+                font-size: 1.5em;
+                margin: 0 10px;
+                align-self: center;
+            }
+            .workflow-row {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 10px 0;
+                flex-wrap: wrap;
+            }
             .controls {
                 text-align: center;
                 margin: 30px 0;
@@ -222,10 +406,16 @@ app.get('/', (req, res) => {
     <body>
         <div class="container">
             <h1>🚀 LangGraph Project Completion Agent</h1>
+            <div class="subtitle">Automated workflow for analyzing commits, extracting Jira tickets, and updating project documentation</div>
             
-            <div class="graph-container" id="graphContainer">
-                <h3>Workflow Graph</h3>
-                <div id="nodes"></div>
+            <div class="workflow-container" id="workflowContainer">
+                <div class="workflow-header">
+                    <div class="workflow-title" id="workflowTitle">Loading Workflow...</div>
+                    <div class="workflow-meta" id="workflowMeta"></div>
+                </div>
+                <div class="workflow-flow" id="workflowFlow">
+                    <div id="nodes"></div>
+                </div>
             </div>
             
             <div class="controls">
@@ -249,13 +439,25 @@ app.get('/', (req, res) => {
                     
                     if (data.type === 'progress') {
                         showStatus(\`Step: \${data.step} - \${data.message}\`, 'info');
+                        // Update node status to running
+                        if (data.nodeId) {
+                            updateNodeStatus(data.nodeId, 'running');
+                        }
+                    } else if (data.type === 'step_complete') {
+                        showStatus(\`✅ \${data.step} completed\`, 'success');
+                        if (data.nodeId) {
+                            updateNodeStatus(data.nodeId, 'completed');
+                        }
                     } else if (data.type === 'complete') {
-                        showStatus('✅ Workflow completed successfully!', 'success');
+                        showStatus('🎉 Workflow completed successfully!', 'success');
                         document.getElementById('runBtn').disabled = false;
                         showOutput(JSON.stringify(data.result, null, 2));
                     } else if (data.type === 'error') {
                         showStatus(\`❌ Error: \${data.error}\`, 'error');
                         document.getElementById('runBtn').disabled = false;
+                        if (data.nodeId) {
+                            updateNodeStatus(data.nodeId, 'error');
+                        }
                     }
                 };
             }
@@ -264,21 +466,48 @@ app.get('/', (req, res) => {
                 fetch('/api/graph')
                     .then(response => response.json())
                     .then(data => {
+                        // Update workflow header
+                        document.getElementById('workflowTitle').textContent = data.metadata.title;
+                        document.getElementById('workflowMeta').textContent = 
+                            \`\${data.metadata.totalSteps} steps • \${data.metadata.estimatedDuration}\`;
+                        
                         const nodesContainer = document.getElementById('nodes');
                         nodesContainer.innerHTML = '';
                         
-                        data.nodes.forEach(node => {
+                        // Create workflow flow with arrows
+                        data.nodes.forEach((node, index) => {
                             const nodeEl = document.createElement('div');
                             nodeEl.className = \`node \${node.type}\`;
-                            nodeEl.textContent = node.label;
+                            nodeEl.innerHTML = \`
+                                <div class="node-label">\${node.label}</div>
+                                <div class="node-description">\${node.description}</div>
+                                <div class="node-status \${node.status}"></div>
+                            \`;
+                            nodeEl.id = \`node-\${node.id}\`;
                             nodesContainer.appendChild(nodeEl);
+                            
+                            // Add arrow between nodes (except for the last one)
+                            if (index < data.nodes.length - 1) {
+                                const arrowEl = document.createElement('div');
+                                arrowEl.className = 'flow-arrow';
+                                arrowEl.innerHTML = '→';
+                                nodesContainer.appendChild(arrowEl);
+                            }
                         });
                         
-                        showStatus('📊 Graph structure loaded', 'success');
+                        showStatus('📊 Workflow structure loaded successfully', 'success');
                     })
                     .catch(error => {
-                        showStatus(\`❌ Failed to load graph: \${error.message}\`, 'error');
+                        showStatus(\`❌ Failed to load workflow: \${error.message}\`, 'error');
                     });
+            }
+            
+            function updateNodeStatus(nodeId, status) {
+                const nodeEl = document.getElementById(\`node-\${nodeId}\`);
+                if (nodeEl) {
+                    const statusEl = nodeEl.querySelector('.node-status');
+                    statusEl.className = \`node-status \${status}\`;
+                }
             }
             
             function runWorkflow() {

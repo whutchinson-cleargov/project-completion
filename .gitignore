@@ -113,3 +113,4 @@ build/
 # Logs
 logs
 *.log
+.env

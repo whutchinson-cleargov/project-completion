@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "project_completion": "./src/graph/workflow.ts:createWorkflow"
+  },
+  "env": ".env"
+}

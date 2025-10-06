@@ -1,6 +1,7 @@
 import { ChatAnthropic } from '@langchain/anthropic';
 import { AgentExecutor, createToolCallingAgent } from 'langchain/agents';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { Tool } from '@langchain/core/tools';
 import { Octokit } from '@octokit/rest';
 import { GraphStateType } from './state.js';
 import {
@@ -601,6 +602,292 @@ Respond with ONLY "YES" if endpoint changes are detected, or "NO" if no endpoint
     }
   }
 
+  // Node 13: Analyze endpoint changes impact on tests
+  async function analyzeEndpointImpactNode(state: GraphStateType): Promise<Partial<GraphStateType>> {
+    console.log('🔬 Step 13: Analyzing endpoint impact on tests...\n');
+
+    if (!state.testCodebasePath || !state.diffData || !state.codebasePath) {
+      return { error: 'Missing required data for endpoint analysis' };
+    }
+
+    try {
+      // Create tools for test codebase only
+      const testCodebaseSearch = new CodebaseSearchTool(state.testCodebasePath);
+      const testCodebaseFile = new CodebaseFileTool(state.testCodebasePath);
+      const testCodebaseStructure = new CodebaseStructureTool(state.testCodebasePath);
+
+      const tools = [testCodebaseSearch, testCodebaseFile, testCodebaseStructure];
+
+      const agentPrompt = ChatPromptTemplate.fromMessages([
+        ['system', 'You are an expert API test analyst. Analyze endpoint changes and their impact on tests.'],
+        ['human', '{input}'],
+        ['placeholder', '{agent_scratchpad}'],
+      ]);
+
+      const agent = await createToolCallingAgent({
+        llm,
+        tools,
+        prompt: agentPrompt,
+      });
+
+      const agentExecutor = new AgentExecutor({
+        agent,
+        tools,
+        verbose: false,
+      });
+
+      const analysisPrompt = `Analyze the following commit diff for API endpoint changes and determine what tests need updating.
+
+COMMIT DIFF:
+${state.diffData.diff}
+
+JIRA TICKET: ${state.jiraData?.ticketNumber || 'N/A'}
+TICKET DESCRIPTION: ${state.jiraData?.description || 'N/A'}
+
+MAIN CODEBASE: ${state.codebasePath}
+TEST CODEBASE: ${state.testCodebasePath}
+
+Please provide a detailed analysis in JSON format:
+{
+  "endpointChanges": [
+    {
+      "endpoint": "path and method",
+      "changeType": "new|modified|deleted",
+      "description": "what changed",
+      "affectedTests": ["list of test files that need updating"]
+    }
+  ],
+  "documentationNeeded": "what docs need to be created/updated in docs/ folder",
+  "testingNotes": "specific things to test and watch for based on ${state.jiraData?.ticketNumber}"
+}`;
+
+      const response = await agentExecutor.invoke({
+        input: analysisPrompt,
+      });
+
+      const analysisText = typeof response.output === 'string'
+        ? response.output
+        : JSON.stringify(response.output);
+
+      console.log('═══════════════════════════════════════════════════════════════');
+      console.log('              🔬 ENDPOINT IMPACT ANALYSIS');
+      console.log('═══════════════════════════════════════════════════════════════\n');
+      console.log(analysisText);
+      console.log('\n═══════════════════════════════════════════════════════════════\n');
+
+      return { endpointAnalysis: analysisText };
+    } catch (error) {
+      const errorMsg = `Failed to analyze endpoint impact: ${(error as Error).message}`;
+      console.error(`❌ ${errorMsg}\n`);
+      return { error: errorMsg };
+    }
+  }
+
+  // Node 14: Update test documentation and code
+  async function updateTestCodeNode(state: GraphStateType): Promise<Partial<GraphStateType>> {
+    console.log('📝 Step 14: Updating test documentation and code...\n');
+
+    if (!state.testCodebasePath || !state.endpointAnalysis) {
+      return { error: 'Missing required data for test updates' };
+    }
+
+    try {
+      // Create file write tool for test codebase
+      class TestCodebaseFileWriteTool extends Tool {
+        name = 'test-codebase-file-write';
+        description = 'Writes content to a file in the test codebase';
+        private codebasePath: string;
+
+        constructor(codebasePath: string) {
+          super();
+          this.codebasePath = codebasePath;
+        }
+
+        async _call(input: string): Promise<string> {
+          const { filePath, content } = JSON.parse(input);
+          const fullPath = path.join(this.codebasePath, filePath);
+          await fs.mkdir(path.dirname(fullPath), { recursive: true });
+          await fs.writeFile(fullPath, content, 'utf-8');
+          return JSON.stringify({ success: true, filePath });
+        }
+      }
+
+      const testCodebaseSearch = new CodebaseSearchTool(state.testCodebasePath);
+      const testCodebaseFile = new CodebaseFileTool(state.testCodebasePath);
+      const testCodebaseWrite = new TestCodebaseFileWriteTool(state.testCodebasePath);
+
+      const tools = [testCodebaseSearch, testCodebaseFile, testCodebaseWrite];
+
+      const agentPrompt = ChatPromptTemplate.fromMessages([
+        ['system', 'You are an expert at updating API tests and documentation. Make precise, minimal changes.'],
+        ['human', '{input}'],
+        ['placeholder', '{agent_scratchpad}'],
+      ]);
+
+      const agent = await createToolCallingAgent({
+        llm,
+        tools,
+        prompt: agentPrompt,
+      });
+
+      const agentExecutor = new AgentExecutor({
+        agent,
+        tools,
+        verbose: false,
+      });
+
+      const updatePrompt = `Based on the endpoint analysis below, update the test codebase:
+
+ENDPOINT ANALYSIS:
+${state.endpointAnalysis}
+
+JIRA TICKET: ${state.jiraData?.ticketNumber || 'N/A'}
+TEST CODEBASE PATH: ${state.testCodebasePath}
+
+Please:
+1. Create/update endpoint documentation in docs/ folder with:
+   - Endpoint details
+   - Request/response format
+   - Testing notes for ${state.jiraData?.ticketNumber}
+
+2. Update test files in src/ to work with the new/modified endpoints
+   - Update API calls
+   - Fix any broken tests
+   - Add new tests if needed
+
+3. Add a testing notes file in docs/ named "${state.jiraData?.ticketNumber}-testing-notes.md" explaining:
+   - What should be tested
+   - Things to watch for
+   - Expected behavior changes
+
+Use the test-codebase-file-write tool to make all necessary changes.`;
+
+      const response = await agentExecutor.invoke({
+        input: updatePrompt,
+      });
+
+      console.log('═══════════════════════════════════════════════════════════════');
+      console.log('              ✅ TEST CODE UPDATES');
+      console.log('═══════════════════════════════════════════════════════════════\n');
+      console.log(response.output);
+      console.log('\n═══════════════════════════════════════════════════════════════\n');
+
+      return { testUpdatesCompleted: true };
+    } catch (error) {
+      const errorMsg = `Failed to update test code: ${(error as Error).message}`;
+      console.error(`❌ ${errorMsg}\n`);
+      return { error: errorMsg };
+    }
+  }
+
+  // Node 15: Run tests
+  async function runTestsNode(state: GraphStateType): Promise<Partial<GraphStateType>> {
+    console.log('🧪 Step 15: Running tests...\n');
+
+    if (!state.testCodebasePath) {
+      return { error: 'Missing test codebase path' };
+    }
+
+    try {
+      // Run npm test
+      const { stdout, stderr } = await execAsync(`cd "${state.testCodebasePath}" && npm test`);
+
+      console.log('═══════════════════════════════════════════════════════════════');
+      console.log('              🧪 TEST RESULTS');
+      console.log('═══════════════════════════════════════════════════════════════\n');
+      console.log(stdout);
+      if (stderr) console.error(stderr);
+      console.log('\n═══════════════════════════════════════════════════════════════\n');
+
+      return {};
+    } catch (error) {
+      const errorMsg = `Tests failed: ${(error as Error).message}`;
+      console.error(`⚠️  ${errorMsg}\n`);
+      // Don't return error - tests failing is expected and should be fixed
+      return {};
+    }
+  }
+
+  // Node 16: Commit test changes
+  async function commitTestChangesNode(state: GraphStateType): Promise<Partial<GraphStateType>> {
+    console.log('💾 Step 16: Committing test changes...\n');
+
+    if (!state.testCodebasePath || !state.testFeatureBranch) {
+      return { error: 'Missing required data for commit' };
+    }
+
+    try {
+      const ticketNumber = state.jiraData?.ticketNumber || 'Update';
+      const commitMessage = `${ticketNumber} update tests for endpoint changes`;
+
+      // Stage all changes
+      await execAsync(`cd "${state.testCodebasePath}" && git add -A && git commit -m "${commitMessage}"`);
+
+      console.log(`✅ Committed test changes with message: "${commitMessage}"\n`);
+
+      return { testCommitCreated: true };
+    } catch (error) {
+      const errorMsg = `Failed to commit test changes: ${(error as Error).message}`;
+      console.error(`❌ ${errorMsg}\n`);
+      return { error: errorMsg };
+    }
+  }
+
+  // Node 17: Create test PR
+  async function createTestPRNode(state: GraphStateType): Promise<Partial<GraphStateType>> {
+    console.log('🔀 Step 17: Creating test pull request...\n');
+
+    if (!state.testCodebasePath || !state.testFeatureBranch) {
+      return { error: 'Missing required data for test PR' };
+    }
+
+    try {
+      const ticketNumber = state.jiraData?.ticketNumber || 'Update';
+      const ticketLink = state.jiraData?.found
+        ? `\n\nJira: ${config.jiraHost}/browse/${state.jiraData.ticketNumber}`
+        : '';
+
+      // Ensure origin remote exists
+      try {
+        await execAsync(`cd "${state.testCodebasePath}" && git remote get-url origin`);
+      } catch (error) {
+        const testRepo = process.env.GITHUB_TEST_REPO;
+        const testOwner = process.env.GITHUB_TEST_OWNER || config.githubOwner;
+        const remoteUrl = `https://${config.githubToken}@github.com/${testOwner}/${testRepo}.git`;
+        await execAsync(`cd "${state.testCodebasePath}" && git remote add origin ${remoteUrl}`);
+      }
+
+      // Push branch to remote
+      await execAsync(`cd "${state.testCodebasePath}" && git push -u origin ${state.testFeatureBranch} --force`);
+
+      // Create PR
+      const prTitle = `${ticketNumber} update tests for endpoint changes`;
+      const prBody = `Automated test updates for endpoint changes from ${ticketNumber}${ticketLink}\n\n**Changes:**\n${state.endpointAnalysis}`;
+
+      const octokit = new Octokit({ auth: config.githubToken });
+      const baseBranch = process.env.BASE_TEST_BRANCH || 'master';
+      const testRepo = process.env.GITHUB_TEST_REPO;
+      const testOwner = process.env.GITHUB_TEST_OWNER || config.githubOwner;
+
+      const { data: pr } = await octokit.pulls.create({
+        owner: testOwner,
+        repo: testRepo!,
+        title: prTitle,
+        body: prBody,
+        head: state.testFeatureBranch,
+        base: baseBranch,
+      });
+
+      console.log(`✅ Test pull request created: ${pr.html_url}\n`);
+
+      return { testPullRequestUrl: pr.html_url };
+    } catch (error) {
+      const errorMsg = `Failed to create test PR: ${(error as Error).message}`;
+      console.error(`❌ ${errorMsg}\n`);
+      return { error: errorMsg };
+    }
+  }
+
   return {
     fetchCommitNode,
     fetchDiffNode,
@@ -614,5 +901,10 @@ Respond with ONLY "YES" if endpoint changes are detected, or "NO" if no endpoint
     detectEndpointChangesNode,
     cloneTestCodebaseNode,
     createTestBranchNode,
+    analyzeEndpointImpactNode,
+    updateTestCodeNode,
+    runTestsNode,
+    commitTestChangesNode,
+    createTestPRNode,
   };
 }

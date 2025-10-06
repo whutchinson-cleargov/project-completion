@@ -26,6 +26,9 @@ export function createWorkflow(config: NodeConfig) {
     .addNode('detectEndpointChanges', nodes.detectEndpointChangesNode)
     .addNode('cloneTestCodebase', nodes.cloneTestCodebaseNode)
     .addNode('createTestBranch', nodes.createTestBranchNode)
+    .addNode('analyzeEndpointImpact', nodes.analyzeEndpointImpactNode)
+    .addNode('updateTestCode', nodes.updateTestCodeNode)
+    .addNode('runTests', nodes.runTestsNode)
     // Define the flow with error checking
     .addEdge('__start__', 'fetchCommit')
     .addConditionalEdges('fetchCommit', shouldContinue, { continue: 'fetchDiff', [END]: END })
@@ -49,8 +52,24 @@ export function createWorkflow(config: NodeConfig) {
         [END]: END,
       }
     )
-    .addConditionalEdges('cloneTestCodebase', shouldContinue, { continue: 'createTestBranch', [END]: END })
-    .addEdge('createTestBranch', END);
+    .addConditionalEdges('cloneTestCodebase', shouldContinue, { continue: 'analyzeEndpointImpact', [END]: END })
+    .addConditionalEdges(
+      'analyzeEndpointImpact',
+      (state: GraphStateType) => {
+        if (state.error) return END;
+        // Only create branch if there are actual changes needed
+        return state.endpointAnalysis && state.endpointAnalysis.includes('endpointChanges')
+          ? 'createTestBranch'
+          : END;
+      },
+      {
+        createTestBranch: 'createTestBranch',
+        [END]: END,
+      }
+    )
+    .addConditionalEdges('createTestBranch', shouldContinue, { continue: 'updateTestCode', [END]: END })
+    .addConditionalEdges('updateTestCode', shouldContinue, { continue: 'runTests', [END]: END })
+    .addEdge('runTests', END);
 
   return workflow.compile();
 }

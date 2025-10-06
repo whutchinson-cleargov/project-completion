@@ -91,6 +91,18 @@ export const GraphState = Annotation.Root({
     default: () => null,
   }),
 
+  // Endpoint analysis results
+  endpointAnalysis: Annotation<string | null>({
+    reducer: (_, newValue) => newValue,
+    default: () => null,
+  }),
+
+  // Test updates made
+  testUpdatesCompleted: Annotation<boolean>({
+    reducer: (_, newValue) => newValue,
+    default: () => false,
+  }),
+
   // Error tracking
   error: Annotation<string | null>({
     reducer: (_, newValue) => newValue,
